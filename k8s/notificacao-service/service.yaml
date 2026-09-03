@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: notificacao-service
+  namespace: sre-platform
+  labels:
+    app: notificacao-service
+spec:
+  selector:
+    app: notificacao-service
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP

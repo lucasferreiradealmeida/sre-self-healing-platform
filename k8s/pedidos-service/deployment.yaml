@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pedidos-service
+  namespace: sre-platform
+  labels:
+    app: pedidos-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pedidos-service
+  template:
+    metadata:
+      labels:
+        app: pedidos-service
+      annotations:
+        # Annotations padrão que o Prometheus (via kube-prometheus-stack ou
+        # scrape config manual) usa para descobrir e fazer scrape do /metrics.
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: pedidos-service
+          # Troque pela imagem publicada no seu Docker Hub, ex:
+          # lucasferreiradealmeida/pedidos-service:latest
+          image: SEU_USUARIO_DOCKERHUB/pedidos-service:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ESTOQUE_SERVICE_URL
+              value: "http://estoque-service:8000"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 5
