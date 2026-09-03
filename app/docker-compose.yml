@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  pedidos-service:
+    build: ./pedidos-service
+    ports:
+      - "8001:8000"
+    environment:
+      - ESTOQUE_SERVICE_URL=http://estoque-service:8000
+    depends_on:
+      - estoque-service
+
+  estoque-service:
+    build: ./estoque-service
+    ports:
+      - "8002:8000"
+    environment:
+      - NOTIFICACAO_SERVICE_URL=http://notificacao-service:8000
+      - ESTOQUE_MINIMO=10
+    depends_on:
+      - notificacao-service
+
+  notificacao-service:
+    build: ./notificacao-service
+    ports:
+      - "8003:8000"
