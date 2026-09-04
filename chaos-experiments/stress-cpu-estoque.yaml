@@ -1,0 +1,38 @@
+# Quarto experimento de caos da Fase 2: satura a CPU dos pods do
+# estoque-service (StressChaos, stress-ng por baixo) — objetivo diferente
+# dos anteriores: não é testar se o serviço aguenta uma falha, é ver se o
+# HPA (k8s/estoque-service/hpa.yaml, min=2 max=8, target 70% de CPU)
+# reage de verdade sob caos, e em quanto tempo.
+#
+# StressChaos não depende de iptables/tc (diferente do NetworkChaos do
+# Game Day 003) — roda stress-ng dentro do cgroup do container, sem tocar
+# em rede. Não deve ter o problema de nftables vs iptables-legacy.
+#
+# workers: 2, load: 100 força os pods a baterem no limit de CPU do
+# container (300m, k8s/estoque-service/deployment.yaml) — bem acima do
+# target de 70% sobre o request (100m), pra disparar o HPA de forma
+# confiável mesmo com a instabilidade conhecida do metrics-server neste
+# cluster (docs/local-cluster-setup.md).
+#
+# Hipótese e resultado: docs/game-days/2026-09-04-stress-cpu-estoque.md
+#
+#   kubectl apply -f chaos-experiments/stress-cpu-estoque.yaml
+#   kubectl -n sre-platform get stresschaos stress-cpu-estoque -o yaml   # status/eventos
+#   kubectl get hpa -n sre-platform estoque-service -w                  # acompanhar o scale-up
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: stress-cpu-estoque
+  namespace: sre-platform
+spec:
+  mode: all
+  selector:
+    namespaces:
+      - sre-platform
+    labelSelectors:
+      app: estoque-service
+  stressors:
+    cpu:
+      workers: 2
+      load: 100
+  duration: "180s"
