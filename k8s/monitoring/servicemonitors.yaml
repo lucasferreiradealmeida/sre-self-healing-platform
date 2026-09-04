@@ -1,0 +1,80 @@
+# ServiceMonitors para os três microsserviços da plataforma.
+# O Prometheus (kube-prometheus-stack) descobre estes objetos porque
+# nos values setamos serviceMonitorSelectorNilUsesHelmValues=false.
+#
+#   kubectl apply -f k8s/monitoring/servicemonitors.yaml
+#
+# Cada Service expõe a porta nomeada "http" (8000) com /metrics.
+#
+# metricRelabelings: a app expõe um label `endpoint` (a rota HTTP), que
+# colide com o label `endpoint` que o próprio ServiceMonitor injeta (nome
+# da porta). O Prometheus resolve a colisão renomeando o da app para
+# `exported_endpoint`. Aqui copiamos esse valor para um label limpo
+# `route` e descartamos `exported_endpoint`, para as queries de SLO
+# ficarem legíveis: http_requests_total{job="pedidos-service", route="/pedidos"}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pedidos-service
+  namespace: sre-platform
+  labels:
+    app: pedidos-service
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: pedidos-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      metricRelabelings:
+        - sourceLabels: [exported_endpoint]
+          targetLabel: route
+        - action: labeldrop
+          regex: exported_endpoint
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: estoque-service
+  namespace: sre-platform
+  labels:
+    app: estoque-service
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: estoque-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      metricRelabelings:
+        - sourceLabels: [exported_endpoint]
+          targetLabel: route
+        - action: labeldrop
+          regex: exported_endpoint
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: notificacao-service
+  namespace: sre-platform
+  labels:
+    app: notificacao-service
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: notificacao-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      metricRelabelings:
+        - sourceLabels: [exported_endpoint]
+          targetLabel: route
+        - action: labeldrop
+          regex: exported_endpoint
