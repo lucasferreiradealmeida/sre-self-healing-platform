@@ -38,37 +38,76 @@ multipass list
 
 Anote o IP de cada VM (formato `10.x.x.x`) — vai precisar deles no `kubeadm init`.
 
-## 4. Entrar em cada VM e instalar containerd + kubeadm + kubelet + kubectl
+## 4. Entrar em cada VM e preparar o nó (containerd + kubeadm + kubelet + kubectl)
 
 ```powershell
 multipass shell k8s-control-plane
 ```
 
-Dentro da VM (repita em cada worker também, trocando só o passo 5):
+Dentro da VM (repita **igual** em cada worker; só o passo 5 é exclusivo da
+control-plane):
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y containerd
-sudo mkdir -p /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml
-sudo systemctl restart containerd
+# --- pré-requisitos do kubeadm: sem isso o 'kubeadm init' falha ou o CNI não sobe ---
 
-sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+# swap desligado (requisito do kubelet)
+sudo swapoff -a
+sudo sed -i '/\bswap\b/ s/^\([^#]\)/#\1/' /etc/fstab
+
+# módulos de kernel
+cat <<'EOF' | sudo tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay
+sudo modprobe br_netfilter
+
+# sysctl de rede (roteamento de pods e bridge visível ao iptables)
+cat <<'EOF' | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system
+
+# --- containerd ---
+sudo apt-get update
+sudo apt-get install -y containerd apt-transport-https ca-certificates curl gpg
+sudo mkdir -p /etc/containerd
+containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
+# driver de cgroup = systemd (tem que bater com o default do kubelet)
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd
+sudo systemctl enable containerd
+
+# --- repositório do Kubernetes + binários ---
+sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
 sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
+sudo systemctl enable kubelet
 ```
 
 ## 5. Iniciar o cluster (somente na VM control-plane)
 
 ```bash
-sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+sudo kubeadm init \
+  --pod-network-cidr=192.168.0.0/16 \
+  --apiserver-advertise-address=<IP_DA_CONTROL_PLANE>
 ```
 
+O `--apiserver-advertise-address` fixa o IP interno da VM (o `10.x`/`172.x` do
+passo 3). Sem ele o kubeadm pode anunciar a interface errada e os workers não
+conseguem se juntar.
+
 Guarde o comando `kubeadm join ...` que aparece no final da saída — vai usar
-nos workers.
+nos workers. Se perder, gere de novo na control-plane:
+
+```bash
+kubeadm token create --print-join-command
+```
 
 Depois, ainda na control-plane:
 
@@ -91,9 +130,48 @@ De volta na control-plane:
 
 ```bash
 kubectl get nodes
+kubectl get pods -A
 ```
 
-Todos devem aparecer `Ready` depois de ~1 minuto.
+Todos os nós devem aparecer `Ready` e todos os pods de `kube-system`
+(`calico-node`, `calico-kube-controllers`, `coredns`, `kube-proxy`, etc.)
+`Running` depois de ~2 minutos.
+
+Nos primeiros ~60–90 s é normal ver:
+
+- nós em `NotReady` até o `calico-node` de cada um passar de `Init:x/3` para `Running`;
+- erros `i/o timeout` no log do CoreDNS enquanto o Calico ainda está programando
+  as rotas entre os nós — some sozinho.
+
+Teste rápido de DNS/rede entre nós (deve responder `10.96.0.1`):
+
+```bash
+kubectl run dnstest --image=busybox:1.36 --restart=Never --rm -i -- \
+  nslookup kubernetes.default.svc.cluster.local
+```
+
+## 8. Acessar o cluster pelo Windows (sem `multipass shell`)
+
+Com `kubectl` instalado no host (`winget install Kubernetes.kubectl`):
+
+```powershell
+mkdir $HOME\.kube -Force
+multipass exec k8s-control-plane -- sudo cat /etc/kubernetes/admin.conf > $HOME\.kube\config
+kubectl get nodes
+```
+
+O `admin.conf` já aponta para `https://<IP_DA_CONTROL_PLANE>:6443`, que é
+roteável a partir do host. Se já tiver outros contextos no `~/.kube/config`,
+salve num arquivo separado e use `$env:KUBECONFIG` em vez de sobrescrever.
+
+## Versões de referência (deste setup)
+
+| Componente | Versão |
+|---|---|
+| Imagem Multipass | Ubuntu 26.04 LTS |
+| kubeadm / kubelet / kubectl | v1.30.x |
+| containerd | 2.x (do apt do Ubuntu) |
+| CNI | Calico v3.28.0 |
 
 ## Ligando e desligando (economia de RAM)
 
