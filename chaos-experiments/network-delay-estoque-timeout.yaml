@@ -1,0 +1,27 @@
+# Fase 2 do experimento de latência (ver network-delay-estoque.yaml, que
+# explica por que este arquivo não usa "target"): latência de 8s, acima do
+# timeout de 5s do httpx.AsyncClient em pedidos-service
+# (app/pedidos-service/main.py) — pra ver o que acontece quando a chamada
+# estoura o timeout com o estoque-service saudável, só que lento (diferente
+# do pod-kill: aqui o serviço nunca "cai", só nunca responde a tempo).
+#
+#   kubectl apply -f chaos-experiments/network-delay-estoque-timeout.yaml
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-estoque-timeout
+  namespace: sre-platform
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - sre-platform
+    labelSelectors:
+      app: pedidos-service
+  delay:
+    latency: "8s"
+    jitter: "200ms"
+    correlation: "50"
+  direction: to
+  duration: "60s"

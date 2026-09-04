@@ -62,15 +62,31 @@ Cada experimento documentado como Game Day em `../../docs/game-days/`, com
 hipótese declarada antes de rodar e o resultado real (SLO aguentou ou não —
 ver `../../docs/slo-definitions.md`).
 
+## Limitação conhecida: `NetworkChaos` com `target` não funciona neste cluster
+
+`delay`/`loss`/`corrupt`/`duplicate`/`bandwidth` com `target` dependem do
+`chaos-daemon` marcar pacotes via `iptables` (tabela **legacy**). Este
+Ubuntu 26.04 roda `kube-proxy`/Calico 100% em **nftables** — a regra do
+Chaos Mesh existe, mas numa tabela que o kernel não usa pra filtrar o
+tráfego real, então o efeito é zero (confirmado com `tc -s qdisc show`
+mostrando `Sent 0 bytes 0 pkt`). Workaround em uso: `NetworkChaos` sem
+`target` (afeta todo o egress do pod-fonte, não só o destino desejado) —
+ver [Game Day 003](../../docs/game-days/2026-09-04-network-delay-estoque.md)
+pra detalhes e o efeito colateral que isso causou (liveness probe também
+atrasada → pods reiniciando sozinhos). Corrigir de verdade exigiria
+`update-alternatives --set iptables /usr/sbin/iptables-legacy` nos dois nós
++ restart de `kube-proxy`/`calico-node` — não aplicado ainda (mexe no
+dataplane do cluster inteiro).
+
 ## Próximo passo
 
 Blast radius pequeno (`mode: one`) validado no
 [Game Day 001](../../docs/game-days/2026-09-04-pod-kill-estoque.md); blast
 radius total (`mode: all`, violação real do SLO) validado no
 [Game Day 002](../../docs/game-days/2026-09-04-pod-kill-estoque-all.md) —
-inclusive achou uma lacuna real: os alertas de burn rate multi-janela de
-`docs/slo-definitions.md` não pegam uma falha total que se autorrecupera em
-~12s. Próximo: `NetworkChaos` (latência/perda de pacote, testa timeout e
-retry sem matar pod) ou `StressChaos` (CPU/memória, testa o HPA sob caos) —
-qualquer um já serve de base pra desenhar o `remediation-controller` da
-Fase 3.
+achou uma lacuna real nos alertas de burn rate multi-janela. Latência de
+rede validada no [Game Day 003](../../docs/game-days/2026-09-04-network-delay-estoque.md)
+— achou uma lacuna maior ainda: o SLI atual (`slo-definitions.md`) não
+enxerga uma falha que mata o processo antes dele conseguir reportar o
+próprio erro. Próximo: `StressChaos` (CPU/memória, não depende de
+iptables — testa o HPA sob caos).

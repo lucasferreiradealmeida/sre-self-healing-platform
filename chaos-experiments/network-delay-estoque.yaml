@@ -1,0 +1,53 @@
+# Terceiro experimento de caos da Fase 2: injeta latência de rede na saída
+# do pedidos-service (sem matar nenhum pod) — diferente dos pod-kill
+# anteriores, aqui o serviço continua de pé o tempo inteiro; o que muda é
+# o tempo de ida-e-volta da chamada HTTP.
+#
+# SEM "target": a versão original tinha um seletor de destino
+# (estoque-service, via direction: to + target), que depende de o
+# chaos-daemon marcar pacotes com iptables (CLASSIFY) pra uma fila tc
+# específica. Isso não funciona neste cluster — Ubuntu 26.04 usa nftables
+# por padrão (kube-proxy/Calico só têm regra em iptables-nft), e o
+# chaos-daemon do Chaos Mesh 2.8.4 escreve em iptables-legacy, uma tabela
+# paralela que o kernel não usa pra filtrar o tráfego real. Confirmado com
+# `tc -s qdisc show` dentro do netns do pod: a fila de delay ficava em
+# "Sent 0 bytes 0 pkt" o experimento inteiro.
+#
+# Sem "target", o Chaos Mesh aplica o netem direto no dispositivo (`tc
+# qdisc add dev eth0 root netem ...`), sem precisar de iptables/ipset —
+# atinge TODO o egress do pod, não só o tráfego pro estoque-service. Como
+# pedidos-service só faz uma chamada de saída (pro estoque-service), o
+# efeito prático é quase idêntico ao pretendido.
+#
+# Duas fases, cada uma seu proprio arquivo (o "action: delay" tem duration
+# e se autorrecupera sozinho, não precisa de kubectl delete no meio):
+#
+#   fase 1 (abaixo do timeout de 5s do httpx.AsyncClient em pedidos-service):
+#     kubectl apply -f chaos-experiments/network-delay-estoque.yaml
+#   fase 2 (acima do timeout - chaos-experiments/network-delay-estoque-timeout.yaml)
+#
+# Hipótese e resultado: docs/game-days/2026-09-04-network-delay-estoque.md
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-estoque
+  namespace: sre-platform
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - sre-platform
+    labelSelectors:
+      app: pedidos-service
+  # 500ms aqui, não 2s: sem "target" o delay pega TODO pacote saindo do
+  # pod, inclusive o handshake TCP (SYN/ACK) — cada requisição paga o
+  # delay várias vezes (medido empiricamente: 2s configurado virou ~6.2s
+  # ponta-a-ponta, já estourando o timeout de 5s do httpx). 500ms de
+  # configuração fica com folga abaixo do timeout.
+  delay:
+    latency: "500ms"
+    jitter: "50ms"
+    correlation: "50"
+  direction: to
+  duration: "60s"
