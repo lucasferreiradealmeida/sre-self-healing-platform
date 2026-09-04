@@ -25,7 +25,7 @@ spec:
         - name: pedidos-service
           # Troque pela imagem publicada no seu Docker Hub, ex:
           # lucasferreiradealmeida/pedidos-service:latest
-          image: SEU_USUARIO_DOCKERHUB/pedidos-service:latest
+          image: lucasferreiradealmeida/pedidos-service:latest
           ports:
             - containerPort: 8000
           env:
