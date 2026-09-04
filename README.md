@@ -73,7 +73,7 @@ O objetivo é medir, com dados reais gerados por falhas controladas, o quanto um
 
 ## Roadmap
 
-- [ ] **Fase 1 — Fundação**: microsserviços com dependência entre si, HPA, SLOs definidos
+- [x] **Fase 1 — Fundação**: microsserviços com dependência entre si, HPA, SLOs definidos
 - [ ] **Fase 2 — Chaos Engineering**: experimentos de pod-kill, network delay, stress de CPU/memória, Game Days documentados
 - [ ] **Fase 3 — Auto-remediação**: webhook Alertmanager → controller → ação corretiva automática
 - [ ] **Fase 4 — Aprendizado contínuo**: post-mortem automático, dashboard histórico de reliability score
