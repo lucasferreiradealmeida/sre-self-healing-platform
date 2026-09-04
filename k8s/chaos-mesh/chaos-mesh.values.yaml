@@ -1,0 +1,26 @@
+# Chaos Mesh instalado enxuto para o cluster local (2 nós, ~3-4GiB cada,
+# já com kube-prometheus-stack rodando — ver ../monitoring/README.md).
+# Só sobrescreve o que precisa mudar; o resto fica no default do chart.
+#
+#   helm repo add chaos-mesh https://charts.chaos-mesh.org
+#   helm install chaos-mesh chaos-mesh/chaos-mesh \
+#     -n chaos-mesh --create-namespace \
+#     --version 2.8.4 \
+#     -f k8s/chaos-mesh/chaos-mesh.values.yaml
+
+chaosDaemon:
+  # Nosso runtime é containerd (ver docs/local-cluster-setup.md), não docker
+  # (default do chart).
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+
+controllerManager:
+  # Default do chart é 3 réplicas (HA de produção). 1 é suficiente pro
+  # laboratório e economiza ~512Mi de requests que não temos sobrando.
+  replicaCount: 1
+
+dashboard:
+  service:
+    # Default do chart é NodePort. Mesmo padrão do Grafana/Prometheus:
+    # ClusterIP + kubectl port-forward, sem expor porta na VM.
+    type: ClusterIP

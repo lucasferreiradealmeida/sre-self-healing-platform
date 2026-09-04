@@ -1,0 +1,27 @@
+# Primeiro experimento de caos da Fase 2: mata 1 dos 2 pods do
+# estoque-service. Blast radius pequeno de propósito (mode: one, não
+# "all") — o objetivo aqui é validar o mecanismo de chaos + a
+# instrumentação de SLO, não já testar o pior caso (isso vem depois,
+# com mode: all ou um PodChaos de "all" nas duas réplicas).
+#
+# Hipótese e resultado: docs/game-days/2026-09-04-pod-kill-estoque.md
+#
+# pod-kill é uma ação instantânea (mata o pod e deixa o ReplicaSet
+# recriar) — diferente de pod-failure/network-delay, não tem "duration".
+#
+#   kubectl apply -f chaos-experiments/pod-kill-estoque.yaml
+#   kubectl -n sre-platform get podchaos pod-kill-estoque -o yaml   # status/eventos
+#   kubectl delete -f chaos-experiments/pod-kill-estoque.yaml       # limpa depois de rodar
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-estoque
+  namespace: sre-platform
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - sre-platform
+    labelSelectors:
+      app: estoque-service
