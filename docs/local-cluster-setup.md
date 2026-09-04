@@ -164,6 +164,58 @@ O `admin.conf` já aponta para `https://<IP_DA_CONTROL_PLANE>:6443`, que é
 roteável a partir do host. Se já tiver outros contextos no `~/.kube/config`,
 salve num arquivo separado e use `$env:KUBECONFIG` em vez de sobrescrever.
 
+## 9. Fixar os IPs das VMs — **faça isso antes de qualquer `stop`/`start`**
+
+O Multipass no Windows usa o "Default Switch" (NAT com DHCP do Windows). Num
+`multipass stop`/`start` — ou ao mudar RAM/CPU, que exige a VM parada — a VM
+**pode receber um IP novo**. Se o IP da **control-plane** mudar, o cluster
+quebra: os certificados do kubeadm e os manifests estáticos estão amarrados ao
+IP do `kubeadm init`, e etcd + apiserver entram em `CrashLoopBackOff` com
+`no route to host`.
+
+Prevenção: fixe o IP atual de cada VM como endereço estático adicional em
+`eth0`, mantendo o DHCP. Rode **dentro de cada VM** (troque o IP e o MAC pelos
+valores reais de `ip -4 addr show eth0` e `cat /sys/class/net/eth0/address`):
+
+```bash
+sudo tee /etc/netplan/99-extra-static.yaml >/dev/null <<EOF
+network:
+  version: 2
+  ethernets:
+    default:
+      match:
+        macaddress: "<MAC_DA_ETH0>"
+      dhcp4: true
+      addresses:
+        - <IP_ATUAL_DA_VM>/20
+EOF
+sudo chmod 600 /etc/netplan/99-extra-static.yaml
+sudo netplan apply
+```
+
+O gateway/máscara do Default Switch (`/20`, gw `.1` da subnet) é estável
+enquanto o host não reiniciar.
+
+### Se a control-plane já quebrou por troca de IP
+
+1. Descubra o IP que os certs esperam:
+   `multipass exec k8s-control-plane -- sudo grep advertise-address /etc/kubernetes/manifests/kube-apiserver.yaml`
+2. Adicione esse IP de volta ao `eth0` com o bloco netplan acima (usando o IP
+   **antigo**), `sudo netplan apply`.
+3. `sudo systemctl restart kubelet` e aguarde etcd/apiserver saírem do
+   CrashLoopBackOff (`sudo crictl ps`).
+
+> Se o **host** reiniciar e a subnet inteira mudar, refaça o passo 9 com os
+> IPs novos em todas as VMs (e `kubectl` do host aponta pro IP no
+> `~/.kube/config`).
+
+## Observabilidade
+
+Depois que os SLIs estiverem sendo expostos pelos serviços, instale o
+kube-prometheus-stack seguindo [`../k8s/monitoring/README.md`](../k8s/monitoring/README.md)
+— inclui os values enxutos para caber nas VMs e a limitação conhecida de
+latência da API (fsync lento do disco virtual).
+
 ## Versões de referência (deste setup)
 
 | Componente | Versão |
@@ -172,8 +224,13 @@ salve num arquivo separado e use `$env:KUBECONFIG` em vez de sobrescrever.
 | kubeadm / kubelet / kubectl | v1.30.x |
 | containerd | 2.x (do apt do Ubuntu) |
 | CNI | Calico v3.28.0 |
+| Helm | v3.16.x |
+| kube-prometheus-stack | chart 89.x |
 
 ## Ligando e desligando (economia de RAM)
+
+> ⚠️ Só é seguro depois de fixar os IPs (passo 9). Sem isso, um `start` pode
+> trocar o IP da control-plane e derrubar o cluster.
 
 ```powershell
 # Libera a RAM de volta pro Windows quando não estiver usando
@@ -182,6 +239,10 @@ multipass stop k8s-control-plane k8s-worker-1
 # Religa depois, com o estado preservado
 multipass start k8s-control-plane k8s-worker-1
 ```
+
+Ao religar, a API da control-plane pode levar 1–2 min para responder e os
+pods de `sre-platform`/`monitoring` reiniciam (ficam todos no worker). Confira
+com `kubectl get pods -A` até estabilizar.
 
 ## Aplicando os manifests do projeto
 

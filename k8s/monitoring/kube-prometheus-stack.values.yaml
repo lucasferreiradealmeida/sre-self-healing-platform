@@ -1,0 +1,106 @@
+# Values enxutos do kube-prometheus-stack para o cluster local (VMs Multipass).
+# Objetivo: caber com folga no worker-1 (4 GiB) deixando espaço para a app,
+# Chaos Mesh (Fase 2) e o controller de remediação (Fase 3).
+#
+#   helm install monitoring prometheus-community/kube-prometheus-stack \
+#     -n monitoring --create-namespace \
+#     -f k8s/monitoring/kube-prometheus-stack.values.yaml
+
+# --- Alertmanager: desligado por enquanto. Volta na Fase 3 (rota p/ o
+#     webhook do remediation-controller). ---
+alertmanager:
+  enabled: false
+
+# --- Componentes de control-plane que no kubeadm sobem com bind em
+#     127.0.0.1 (scrape falharia e sujaria os dashboards). Reabilitar
+#     depois ajustando os bind-address se quisermos essas métricas. ---
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  # Jobs de patch dos webhooks com footprint mínimo
+  admissionWebhooks:
+    patch:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    shards: 1
+    retention: 12h
+    retentionSize: 1GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+
+    # Descobre TODOS os ServiceMonitor/PodMonitor/PrometheusRule do cluster,
+    # não só os que têm o label release=monitoring. Facilita plugar os
+    # ServiceMonitors da app (k8s/monitoring/servicemonitors.yaml).
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    podMonitorNamespaceSelector: {}
+    ruleNamespaceSelector: {}
+
+    # Sem PVC (o cluster não tem StorageClass default) — emptyDir.
+    # Retenção curta, então perder o histórico num restart é aceitável
+    # nesta fase. Para persistir: instalar local-path-provisioner e
+    # preencher storageSpec aqui.
+    resources:
+      requests:
+        cpu: 150m
+        memory: 300Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+grafana:
+  replicas: 1
+  # senha do admin: 'prom-operator' (default do chart). Trocar se for expor.
+  persistence:
+    enabled: false
+  # Grafana 13 + provisioning de dashboards passa de 240Mi em regime;
+  # 256Mi de limite ficava no fio (risco de OOM ao abrir dashboard).
+  resources:
+    requests:
+      cpu: 50m
+      memory: 160Mi
+    limits:
+      cpu: 300m
+      memory: 400Mi
+  defaultDashboardsEnabled: true
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
