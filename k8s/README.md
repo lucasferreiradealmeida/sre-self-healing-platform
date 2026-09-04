@@ -70,6 +70,6 @@ pro `Service` de cada microsserviço.
 
 ## Próximo passo
 
-Com os SLIs sendo coletados de verdade pelo Prometheus, o próximo passo do
-roadmap é definir os SLOs formais (`docs/slo-definitions.md`) e partir para a
-Fase 2 — instalar o Chaos Mesh e começar os primeiros Game Days.
+Com os SLIs sendo coletados de verdade pelo Prometheus, os SLOs formais já
+estão definidos em [`../docs/slo-definitions.md`](../docs/slo-definitions.md).
+Próximo passo, Fase 2 — instalar o Chaos Mesh e começar os primeiros Game Days.
