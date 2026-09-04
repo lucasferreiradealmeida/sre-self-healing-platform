@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: estoque-service
-          image: SEU_USUARIO_DOCKERHUB/estoque-service:latest
+          image: lucasferreiradealmeida/estoque-service:latest
           ports:
             - containerPort: 8000
           env:

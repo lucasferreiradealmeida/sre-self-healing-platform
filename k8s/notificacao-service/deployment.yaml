@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: notificacao-service
-          image: SEU_USUARIO_DOCKERHUB/notificacao-service:latest
+          image: lucasferreiradealmeida/notificacao-service:latest
           ports:
             - containerPort: 8000
           resources:
