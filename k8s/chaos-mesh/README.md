@@ -78,15 +78,15 @@ atrasada → pods reiniciando sozinhos). Corrigir de verdade exigiria
 + restart de `kube-proxy`/`calico-node` — não aplicado ainda (mexe no
 dataplane do cluster inteiro).
 
-## Próximo passo
+## Fase 2 encerrada — quatro Game Days
 
-Blast radius pequeno (`mode: one`) validado no
-[Game Day 001](../../docs/game-days/2026-09-04-pod-kill-estoque.md); blast
-radius total (`mode: all`, violação real do SLO) validado no
-[Game Day 002](../../docs/game-days/2026-09-04-pod-kill-estoque-all.md) —
-achou uma lacuna real nos alertas de burn rate multi-janela. Latência de
-rede validada no [Game Day 003](../../docs/game-days/2026-09-04-network-delay-estoque.md)
-— achou uma lacuna maior ainda: o SLI atual (`slo-definitions.md`) não
-enxerga uma falha que mata o processo antes dele conseguir reportar o
-próprio erro. Próximo: `StressChaos` (CPU/memória, não depende de
-iptables — testa o HPA sob caos).
+| # | Experimento | Achado principal |
+|---|---|---|
+| [001](../../docs/game-days/2026-09-04-pod-kill-estoque.md) | `pod-kill`, `mode: one` | Disponibilidade aguenta; MTTR variável (~70s, flap de probe) |
+| [002](../../docs/game-days/2026-09-04-pod-kill-estoque-all.md) | `pod-kill`, `mode: all` | SLO violado de verdade; alertas de burn rate multi-janela não pegam falha total de ~12s |
+| [003](../../docs/game-days/2026-09-04-network-delay-estoque.md) | `NetworkChaos` (latência) | SLI atual é cego a falha que mata o processo antes dele reportar o próprio erro |
+| [004](../../docs/game-days/2026-09-04-stress-cpu-estoque.md) | `StressChaos` (CPU) | HPA reage em 50s, mas dilui pod doente em vez de substituí-lo |
+
+Próximo passo do roadmap: Fase 3 (`remediation-controller`), incorporando os
+quatro achados acima — não só o caminho feliz de "alerta disparou →
+reinicia o Deployment".
