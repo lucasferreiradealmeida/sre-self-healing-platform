@@ -65,8 +65,12 @@ ver `../../docs/slo-definitions.md`).
 ## Próximo passo
 
 Blast radius pequeno (`mode: one`) validado no
-[Game Day 001](../../docs/game-days/2026-09-04-pod-kill-estoque.md). Próximo:
-aumentar o blast radius (`mode: all` no `estoque-service`, depois
-`NetworkChaos`/`StressChaos`) pra gerar uma violação real do SLO de
-disponibilidade — a Fase 3 (auto-remediação) precisa de um gatilho de
-verdade pra reagir.
+[Game Day 001](../../docs/game-days/2026-09-04-pod-kill-estoque.md); blast
+radius total (`mode: all`, violação real do SLO) validado no
+[Game Day 002](../../docs/game-days/2026-09-04-pod-kill-estoque-all.md) —
+inclusive achou uma lacuna real: os alertas de burn rate multi-janela de
+`docs/slo-definitions.md` não pegam uma falha total que se autorrecupera em
+~12s. Próximo: `NetworkChaos` (latência/perda de pacote, testa timeout e
+retry sem matar pod) ou `StressChaos` (CPU/memória, testa o HPA sob caos) —
+qualquer um já serve de base pra desenhar o `remediation-controller` da
+Fase 3.

@@ -1,0 +1,24 @@
+# Segundo experimento de caos da Fase 2: mata as DUAS réplicas do
+# estoque-service de uma vez (mode: all) — sem sobrevivente pra absorver
+# o tráfego, diferente de pod-kill-estoque.yaml (mode: one, Game Day 001).
+# Objetivo: gerar uma violação real do SLO de disponibilidade de
+# pedidos-service, o gatilho que a Fase 3 (auto-remediação) vai precisar.
+#
+# Hipótese e resultado: docs/game-days/2026-09-04-pod-kill-estoque-all.md
+#
+#   kubectl apply -f chaos-experiments/pod-kill-estoque-all.yaml
+#   kubectl -n sre-platform get podchaos pod-kill-estoque-all -o yaml   # status/eventos
+#   kubectl delete -f chaos-experiments/pod-kill-estoque-all.yaml       # limpa depois de rodar
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-estoque-all
+  namespace: sre-platform
+spec:
+  action: pod-kill
+  mode: all
+  selector:
+    namespaces:
+      - sre-platform
+    labelSelectors:
+      app: estoque-service
