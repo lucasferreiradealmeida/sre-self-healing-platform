@@ -1,0 +1,113 @@
+# Geração de carga sintética + reposição de estoque, para manter SLI real
+# fluindo (baseline antes dos Game Days da Fase 2).
+#
+#   kubectl apply -f k8s/monitoring/loadgen.yaml
+#   kubectl -n sre-platform scale deploy/loadgen --replicas=0   # pausar
+#
+# O estoque dos serviços é em memória e só diminui; o CronJob reinicia o
+# estoque-service periodicamente para repor, senão todo pedido vira 409
+# (rejeição correta, mas empobrece o baseline de latência de sucesso).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadgen
+  namespace: sre-platform
+  labels:
+    app: loadgen
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loadgen
+  template:
+    metadata:
+      labels:
+        app: loadgen
+    spec:
+      containers:
+        - name: loadgen
+          image: curlimages/curl:8.10.1
+          resources:
+            requests: { cpu: 20m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -u
+              PEDIDOS=http://pedidos-service:8000
+              i=0
+              while true; do
+                i=$((i + 1))
+                case $((i % 20)) in
+                  0|1|2|3|4|5|6|7|8|9|10|11) P=produto-c; Q=1 ;;   # 60% sucesso (estoque alto)
+                  12|13|14|15|16)            P=produto-a; Q=1 ;;   # 25% sucesso
+                  17|18)                     P=produto-b; Q=3 ;;   # 10% ora 200 ora 409
+                  19)                        P=produto-zzz; Q=1 ;; # 5% 404 (produto inexistente)
+                esac
+                curl -s -o /dev/null -w "%{http_code} $P\n" \
+                  -X POST "$PEDIDOS/pedidos?produto_id=$P&quantidade=$Q" || true
+                sleep 1
+              done
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: estoque-replenisher
+  namespace: sre-platform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: estoque-replenisher
+  namespace: sre-platform
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: estoque-replenisher
+  namespace: sre-platform
+subjects:
+  - kind: ServiceAccount
+    name: estoque-replenisher
+    namespace: sre-platform
+roleRef:
+  kind: Role
+  name: estoque-replenisher
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: estoque-replenisher
+  namespace: sre-platform
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 120
+      template:
+        spec:
+          serviceAccountName: estoque-replenisher
+          restartPolicy: Never
+          containers:
+            - name: kubectl
+              image: rancher/kubectl:v1.30.7
+              resources:
+                requests: { cpu: 20m, memory: 32Mi }
+                limits: { cpu: 100m, memory: 64Mi }
+              # entrypoint da imagem já é `kubectl`
+              args:
+                - -n
+                - sre-platform
+                - rollout
+                - restart
+                - deployment/estoque-service
