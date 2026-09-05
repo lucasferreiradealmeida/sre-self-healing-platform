@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: remediation-controller
+  namespace: sre-platform
+  labels:
+    app: remediation-controller
+spec:
+  selector:
+    app: remediation-controller
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP

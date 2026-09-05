@@ -1,4 +1,5 @@
-# ServiceMonitors para os três microsserviços da plataforma.
+# ServiceMonitors para os três microsserviços da plataforma e o
+# remediation-controller (Fase 3).
 # O Prometheus (kube-prometheus-stack) descobre estes objetos porque
 # nos values setamos serviceMonitorSelectorNilUsesHelmValues=false.
 #
@@ -47,6 +48,28 @@ spec:
   selector:
     matchLabels:
       app: estoque-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      metricRelabelings:
+        - sourceLabels: [exported_endpoint]
+          targetLabel: route
+        - action: labeldrop
+          regex: exported_endpoint
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: remediation-controller
+  namespace: sre-platform
+  labels:
+    app: remediation-controller
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: remediation-controller
   endpoints:
     - port: http
       path: /metrics

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: remediation-controller
+  namespace: sre-platform
+  labels:
+    app: remediation-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: remediation-controller
+  template:
+    metadata:
+      labels:
+        app: remediation-controller
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      serviceAccountName: remediation-controller
+      containers:
+        - name: remediation-controller
+          image: lucasferreiradealmeida/remediation-controller:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: NAMESPACE
+              value: "sre-platform"
+            - name: PROMETHEUS_URL
+              value: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
+            - name: COOLDOWN_SECONDS
+              value: "600"
+            - name: CONFIRM_TIMEOUT_SECONDS
+              value: "120"
+            - name: CONFIRM_POLL_INTERVAL_SECONDS
+              value: "5"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 5
