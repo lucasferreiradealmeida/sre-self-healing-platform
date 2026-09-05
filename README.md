@@ -75,10 +75,10 @@ O objetivo é medir, com dados reais gerados por falhas controladas, o quanto um
 
 - [x] **Fase 1 — Fundação**: microsserviços com dependência entre si, HPA, SLOs definidos
 - [x] **Fase 2 — Chaos Engineering**: experimentos de pod-kill, network delay, stress de CPU/memória, Game Days documentados
-- [ ] **Fase 3 — Auto-remediação**: webhook Alertmanager → controller → ação corretiva automática
+- [ ] **Fase 3 — Auto-remediação**: webhook Alertmanager → controller → ação corretiva automática (design em [`docs/remediation-controller-design.md`](docs/remediation-controller-design.md))
 - [ ] **Fase 4 — Aprendizado contínuo**: post-mortem automático, dashboard histórico de reliability score
 
-Detalhes de cada fase em [`docs/architecture.md`](docs/architecture.md).
+Detalhes de cada Game Day em [`docs/game-days/`](docs/game-days/) e das SLOs em [`docs/slo-definitions.md`](docs/slo-definitions.md).
 
 ---
 
